@@ -9,6 +9,11 @@
 	</option>
 
 	<include file="shared.xml"></include>
+	<asset>
+    	<mesh name="object_mesh" file="bowl.obj" />
+		<mesh name="animals_mesh" file="farm.obj" />
+	</asset>
+
 
 	<worldbody>
 		<body name="floor0" pos="0 0 0">
@@ -26,11 +31,51 @@
 			<geom name="tablegeom0" size="0.3 0.6 0.2" pos="0 0 0" type="box" material="table_mat" density="2000" friction="1 1 1"></geom>
 		</body>
 
-		<body name="object" pos="1.405 0.3 0.58625">
+		<!--
+		<body name="object1" pos="1.405 0.3 0.58625">
+			<joint name="object_joint1" type="free" limited="false"></joint>
+			<geom name="object1"
+				type="mesh"
+				mesh="animals_mesh"
+				material="block_mat"
+				density="50000"
+				condim="4"
+				friction="1 1 1"
+				solimp="0.95 0.95 0.01"
+				solref="0.02 0.5"/>
+			<site name="object_site1" pos="0 0 0" size="0.035 0.035 0.035" rgba="1 0 0 0" type="box"></site>
+		</body>
+		-->
+		<body name="object" pos="1.405 0 0.4">
 			<joint name="object_joint0" type="free" limited="false"></joint>
-			<geom size="0.035 0.035 0.035" type="box" name="object0" material="block_mat" density="50000" condim="4" friction="1 1 1" solimp="1 1 1" solref="0.02 1"></geom>
+			<geom name="object0"
+				type="mesh"
+				mesh="object_mesh"
+				material="block_mat"
+				density="50000"
+				condim="4"
+				friction="1 1 1"
+				solimp="0.95 0.95 0.01"
+				solref="0.02 0.5"/>
 			<site name="object_site" pos="0 0 0" size="0.035 0.035 0.035" rgba="1 0 0 0" type="box"></site>
 		</body>
+
+		<body name="object1" pos="1.405 0.3 0.58625">
+			<joint name="object_joint1" type="free" limited="false"></joint>
+			<geom 
+				size="0.0175 0.0175 0.0175" 
+				type="box" 
+				name="object1" 
+				material="block_mat" 
+				density="50000" 
+				condim="4" 
+				friction="1 1 1" 
+				solimp="1 1 1" 
+				solref="0.02 1">
+			</geom>
+			<site name="object_site1" pos="0 0 0" size="0.0175 0.0175 0.0175" rgba="1 0 0 0" type="box"></site>
+		</body>
+
 
 		<light directional="true" ambient="0.1 0.1 0.1" diffuse="0 0 0" specular="0 0 0" castshadow="false" pos="1.65 0 10" dir="-0.57 -0.57 -0.57" name="light0"></light>
         <light directional="true" ambient="0.1 0.1 0.1" diffuse="0 0 0" specular="0 0 0" castshadow="false" pos="0 -4 4" dir="0 1 -0.1" name="light1"></light>
