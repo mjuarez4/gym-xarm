@@ -317,8 +317,22 @@ class Base(gym.Env):
 
     def _render(self, renderer: MujocoRenderer):
         self._render_callback()
-        render = renderer.render(self.render_mode, camera_name="camera0")
+        if renderer.width is None:
+            renderer.width = self.visualization_width
+        if renderer.height is None:
+            renderer.height = self.visualization_height
+        
+        render = renderer.render(self.render_mode)
         return render.copy() if render is not None else None
+
+        
+        """
+        renderer.camera_name = camera_name="camera0"
+        render = renderer.render(self.render_mode)
+        return render.copy() if render is not None else None
+
+    
+        """
 
     def _render_callback(self):
         self._mujoco.mj_forward(self.model, self.data)

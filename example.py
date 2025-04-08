@@ -1,5 +1,7 @@
 import gymnasium as gym
 import gym_xarm
+import os
+os.environ["MUJOCO_GL"] = "glfw"
 
 env = gym.make("gym_xarm/XarmLift-v0", render_mode="human")
 observation, info = env.reset()
