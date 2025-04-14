@@ -37,6 +37,7 @@ class Base(gym.Env):
         task,
         obs_type="state",
         render_mode="rgb_array",
+        camera_name="camera0",
         gripper_rotation=None,
         observation_width=84,
         observation_height=84,
@@ -85,6 +86,8 @@ class Base(gym.Env):
         """Initialize MuJoCo simulation data structures mjModel and mjData."""
         self.model = self._mujoco.MjModel.from_xml_path(self.xml_path)
         self.data = self._mujoco.MjData(self.model)
+
+        
         self._model_names = self._utils.MujocoModelNames(self.model)
 
         self.model.vis.global_.offwidth = self.observation_width
@@ -170,6 +173,11 @@ class Base(gym.Env):
     def robot_state(self):
         return np.concatenate([self.eef - self.center_of_table, self.gripper_angle])
 
+    #block
+    @property
+    def block(self):
+        return self._utils.get_site_xpos(self.model, self.data, "object_site1") - self.center_of_table
+    #bowl
     @property
     def obj(self):
         return self._utils.get_site_xpos(self.model, self.data, "object_site") - self.center_of_table
@@ -234,13 +242,97 @@ class Base(gym.Env):
         If a reset was unsuccessful (e.g. if a randomized state caused an error in the
         simulation), this method should indicate such a failure by returning False.
         In such a case, this method will be called again to attempt a the reset again.
-        """
+        
+        self.data.time = self.initial_time
+        self.data.qpos[:] = np.copy(self.initial_qpos)
+        self.data.qvel[:] = np.copy(self.initial_qvel)
+
+        # Define reasonable table bounds (adjust if your table is different)
+        x_range = [1.35, 1.55]
+        y_range = [0.0, 0.5]
+        z_bowl = 0.4         # based on your XML position for bowl
+        z_block = 0.58625    # based on your XML position for block
+
+        
+        # Bowl
+        bowl_xy = np.random.uniform([1.3, 0.2], [1.5, 0.4])
+        bowl_qpos = np.array([*bowl_xy, 0.4, 1, 0, 0, 0])
+        bowl_idx = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, "object_joint0")
+        bowl_qpos_addr = self.model.jnt_qposadr[bowl_idx]
+        self.data.qpos[bowl_qpos_addr : bowl_qpos_addr + 7] = bowl_qpos
+
+        # Block
+        block_xy = np.random.uniform([1.3, 0.2], [1.5, 0.4])
+        block_qpos = np.array([*block_xy, 0.58625, 1, 0, 0, 0])
+        block_idx = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, "object_joint1")
+
+        block_qpos_addr = self.model.jnt_qposadr[block_idx]
+        self.data.qpos[block_qpos_addr : block_qpos_addr + 7] = block_qpos
+
+
+        self._sample_goal()
+        self._mujoco.mj_step(self.model, self.data, nstep=10)
+        return True
+        
         self.data.time = self.initial_time
         self.data.qpos[:] = np.copy(self.initial_qpos)
         self.data.qvel[:] = np.copy(self.initial_qvel)
         self._sample_goal()
         self._mujoco.mj_step(self.model, self.data, nstep=10)
         return True
+        """
+
+       
+        # === STEP 1: Reset time, qpos, qvel ===
+        self.data.time = self.initial_time
+        self.data.qpos[:] = np.copy(self.initial_qpos)
+        self.data.qvel[:] = np.copy(self.initial_qvel)
+
+        # === STEP 2: Move gripper far from block (to avoid contact) ===
+        self._utils.set_mocap_pos(self.model, self.data, "robot0:mocap2", [1.5, 0.1, 0.9])
+        self._utils.set_mocap_quat(self.model, self.data, "robot0:mocap2", [1, 0, 0, 0])
+
+        # Reset finger joints (gripper open)
+        self._utils.set_joint_qpos(self.model, self.data, "right_inner_knuckle_joint", 0.0)
+        self._utils.set_joint_qpos(self.model, self.data, "left_inner_knuckle_joint", 0.0)
+
+        # Clear all actuator forces / controls
+        self.data.ctrl[:] = 0
+
+        # === STEP 3: Randomize block position safely ===
+        block_x_range = [1.45, 1.55]
+        block_y_range = [0.0, 0.15]
+        z_block = 0.605  # Slightly above table
+
+        block_xy = np.random.uniform(block_x_range, block_y_range)
+        block_qpos = np.array([*block_xy, z_block, 1, 0, 0, 0])  # position + quaternion
+
+        block_joint_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_JOINT, "object_joint1")
+        block_qpos_addr = self.model.jnt_qposadr[block_joint_id]
+        self.data.qpos[block_qpos_addr : block_qpos_addr + 7] = block_qpos
+
+        block_dof_addr = self.model.jnt_dofadr[block_joint_id]
+        self.data.qvel[block_dof_addr : block_dof_addr + 6] = 0  # zero velocity
+
+        # === STEP 4: Recompute physics and finalize state ===
+        self._mujoco.mj_forward(self.model, self.data)
+
+        # Optional: warm-up steps for visual stability
+        self._mujoco.mj_step(self.model, self.data, nstep=10)
+
+        # Sample goal if needed
+        self._sample_goal()
+
+        # === DEBUG: Print final state
+        block_world_pos = self._utils.get_site_xpos(self.model, self.data, "object_site1")
+        gripper_pos = self._utils.get_site_xpos(self.model, self.data, "grasp")
+        print("✅ Block pos:", block_world_pos)
+        print("🤖 Gripper pos:", gripper_pos)
+
+        return True
+
+        
+        
 
     def get_obs(self):
         if self.obs_type == "state":
@@ -317,22 +409,27 @@ class Base(gym.Env):
 
     def _render(self, renderer: MujocoRenderer):
         self._render_callback()
+        
+
+        
+        
+    
         if renderer.width is None:
             renderer.width = self.visualization_width
         if renderer.height is None:
             renderer.height = self.visualization_height
         
-        render = renderer.render(self.render_mode)
-        return render.copy() if render is not None else None
+        cam_id = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_CAMERA, "camera0")
+        renderer.camera_id = cam_id  # ✅ this forces it to your XML camera
 
+        #print("🎥 Using camera ID:", renderer.camera_id)
+        #print("🎥 Camera pos:", self.model.cam_pos[renderer.camera_id])
+
+        render = renderer.render(self.render_mode)
         
-        """
-        renderer.camera_name = camera_name="camera0"
-        render = renderer.render(self.render_mode)
+            
         return render.copy() if render is not None else None
-
-    
-        """
+        
 
     def _render_callback(self):
         self._mujoco.mj_forward(self.model, self.data)
